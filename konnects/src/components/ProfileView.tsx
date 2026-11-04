@@ -94,6 +94,7 @@ import {
   Legend,
 } from "recharts";
 import { jsPDF } from "jspdf";
+import { useAdminStatus } from "../features/admin";
 
 type SubView =
   | "main"
@@ -475,6 +476,7 @@ Your transaction is secured with ISO-27001 standard.
   // Online status (the personal-details form lives in features/profile/EditProfileForm)
   const [isOnline, setIsOnline] = useState(profile?.isOnline || false);
   const { toast, ToastHost } = useToast();
+  const { isAdmin } = useAdminStatus();
 
   // Accessible Language and Referral Program state
   const [selectedLang, setSelectedLang] = useState(
@@ -1243,6 +1245,16 @@ Your transaction is secured with ISO-27001 standard.
   };
 
   const menuItems = [
+    ...(isAdmin
+      ? [
+          {
+            icon: ShieldCheck,
+            label: "Admin Panel",
+            value: "open_admin",
+            color: "bg-slate-900 text-white",
+          },
+        ]
+      : []),
     {
       icon: RefreshCw,
       label: t("profile.title").includes("Profile")
@@ -1620,10 +1632,113 @@ Your transaction is secured with ISO-27001 standard.
             exit={{ opacity: 0 }}
           >
             <ProfileOverview
+              accountControls={
+                <>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="profile-account-language"
+                      className="block text-sm font-medium text-slate-700 dark:text-slate-200"
+                    >
+                      App language
+                    </label>
+                    <select
+                      id="profile-account-language"
+                      value={language}
+                      onChange={(event) => {
+                        const nextLanguage = event.target.value;
+                        if (nextLanguage === "en" || nextLanguage === "bn") {
+                          haptics.light();
+                          setLanguage(nextLanguage);
+                        }
+                      }}
+                      className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                    >
+                      <option value="en">English (UK)</option>
+                      <option value="bn">বাংলা (Bengali)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!profile?.isWorkerMode}
+                      aria-label="Worker mode"
+                      onClick={toggleWorkerMode}
+                      className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-slate-300 px-3 py-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
+                    >
+                      <span>Worker mode</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {profile?.isWorkerMode ? (
+                          <ToggleRight
+                            size={24}
+                            aria-hidden="true"
+                            className="text-indigo-600 dark:text-indigo-300"
+                          />
+                        ) : (
+                          <ToggleLeft size={24} aria-hidden="true" />
+                        )}
+                        {profile?.isWorkerMode ? "On" : "Off"}
+                      </span>
+                    </button>
+                    <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      Switch between the community and worker experience.
+                    </p>
+                  </div>
+
+                  {profile?.isWorker && (
+                    <>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={isOnline}
+                          aria-label="Available for work"
+                          onClick={handleToggleOnline}
+                          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-slate-300 px-3 py-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:text-white dark:hover:bg-slate-800"
+                        >
+                          <span>Availability</span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span
+                              aria-hidden="true"
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                isOnline ? "bg-emerald-500" : "bg-slate-400"
+                              }`}
+                            />
+                            {isOnline ? "Online" : "Offline"}
+                          </span>
+                        </button>
+                        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                          Set whether you are available for work.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          haptics.light();
+                          setShowWorkerIDModal(true);
+                        }}
+                        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-3 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                      >
+                        <CreditCard size={18} aria-hidden="true" />
+                        Digital Worker ID
+                      </button>
+                    </>
+                  )}
+                </>
+              }
               profile={profile}
               toast={toast}
               actions={menuItems}
               onOpen={(destination) => {
+                if (destination === "open_admin") {
+                  if (isAdmin) {
+                    window.dispatchEvent(new CustomEvent("open-admin-panel"));
+                  }
+                  return;
+                }
+
                 if (destination === "launch_tour") {
                   resetTourLocally(user?.uid || "guest_user");
                   window.dispatchEvent(new CustomEvent("launch-guided-tour"));
@@ -1644,20 +1759,19 @@ Your transaction is secured with ISO-27001 standard.
             key={view}
             className="min-h-[80vh]"
           >
-{view !== "edit" && (
-            <div className="flex items-center space-x-4 mb-8">
-              <button
-                onClick={() => setView("main")}
-                className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100 active:scale-90 transition-all"
-              >
-                <ChevronRight size={20} className="rotate-180" />
-              </button>
-              <h2 className="text-xl font-bold capitalize">
-                {view.replace("-", " ")}
-              </h2>
-            </div>
-
-)}
+            {view !== "edit" && (
+              <div className="flex items-center space-x-4 mb-8">
+                <button
+                  onClick={() => setView("main")}
+                  className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100 active:scale-90 transition-all"
+                >
+                  <ChevronRight size={20} className="rotate-180" />
+                </button>
+                <h2 className="text-xl font-bold capitalize">
+                  {view.replace("-", " ")}
+                </h2>
+              </div>
+            )}
             {/* Dynamic Content based on view */}
             {view === "edit" && (
               <motion.div
@@ -1667,9 +1781,15 @@ Your transaction is secured with ISO-27001 standard.
                 key="edit"
               >
                 <header className="mb-6 border-b border-slate-200 pb-6 dark:border-slate-800">
-                  <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">My profile / Personal details</p>
-                  <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Edit profile</h1>
-                  <p className="mt-2 text-base text-slate-600 dark:text-slate-300">Update your photo, identity, and contact information.</p>
+                  <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                    My profile / Personal details
+                  </p>
+                  <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    Edit profile
+                  </h1>
+                  <p className="mt-2 text-base text-slate-600 dark:text-slate-300">
+                    Update your photo, identity, and contact information.
+                  </p>
                 </header>
                 <EditProfileForm toast={toast} onDone={() => setView("main")} />
               </motion.div>

@@ -14,9 +14,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Admin is granted ONLY via a custom claim set server-side (never by the client).
+    // An admin is someone flagged with the `admin` custom claim, OR listed in the `admins` collection.
+    // `admins` is edited by hand in the Firebase Console only: clients can never write to it.
     function isAdmin() {
-      return isSignedIn() && request.auth.token.admin == true;
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // A moderator-blocked account cannot create new listings, offers or bookings.
+    function notBlocked() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+             !(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('moderationStatus', 'active') in ['temp_blocked', 'perm_blocked']);
     }
 
     function incoming() {
@@ -224,12 +234,19 @@ service cloud.firestore {
       }
 
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidItem(incoming()) && incoming().createdAt == request.time;
+      allow create: if isSignedIn() && notBlocked() && isValidItem(incoming()) && incoming().createdAt == request.time;
       // Only the seller may update, only whitelisted fields, always re-validated.
-      allow update: if isOwner(existing().sellerId) &&
-                    changed().hasOnly(['title', 'description', 'price', 'isFree', 'status', 'images', 'location', 'updatedAt', 'category', 'condition']) &&
-                    isValidItem(incoming()) &&
-                    incoming().createdAt == existing().createdAt;
+      allow update: if (
+                      isOwner(existing().sellerId) &&
+                      changed().hasOnly(['title', 'description', 'price', 'isFree', 'status', 'images', 'location', 'updatedAt', 'category', 'condition']) &&
+                      isValidItem(incoming()) &&
+                      incoming().createdAt == existing().createdAt
+                    ) || (
+                      // Admins may take a listing down, nothing else
+                      isAdmin() &&
+                      changed().hasOnly(['status', 'moderatedBy', 'moderationReason', 'updatedAt']) &&
+                      incoming().status == 'deleted'
+                    );
       allow delete: if false; // Soft delete via status
     }
 
@@ -246,7 +263,7 @@ service cloud.firestore {
       }
 
       allow read: if isSignedIn() && (isOwner(resource.data.buyerId) || isOwner(resource.data.sellerId));
-      allow create: if isSignedIn() &&
+      allow create: if isSignedIn() && notBlocked() &&
                     incoming().buyerId == request.auth.uid &&
                     incoming().sellerId != request.auth.uid &&
                     isValidOffer(incoming()) &&
@@ -298,7 +315,7 @@ service cloud.firestore {
                      isOwner(resource.data.get('workerId', '')) ||
                      isWorkerUser();
 
-      allow create: if isSignedIn() &&
+      allow create: if isSignedIn() && notBlocked() &&
                     incoming().customerId == request.auth.uid &&
                     isValidBooking(incoming()) &&
                     incoming().createdAt == request.time;
@@ -370,6 +387,7 @@ service cloud.firestore {
                     incoming().userId == request.auth.uid &&
                     incoming().keys().size() <= 20;
       allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow update: if isAdmin() && changed().hasOnly(['status', 'resolvedBy', 'resolvedAt']);
     }
 
     // ---------- 8. Reviews ----------
@@ -462,7 +480,8 @@ service cloud.firestore {
     match /feedback/{feedbackId} {
       allow create: if isSignedIn() && incoming().userId == request.auth.uid;
       allow read: if isAdmin();
-      allow update, delete: if false;
+      allow update: if isAdmin() && changed().hasOnly(['status', 'resolvedBy', 'updatedAt']);
+      allow delete: if false;
     }
 
     // ---------- 19. Audit logs (append-only, admin-readable) ----------
@@ -490,6 +509,21 @@ service cloud.firestore {
                     incoming().status == 'pending' &&
                     incoming().createdAt == request.time;
       allow update, delete: if isAdmin();
+    }
+
+    // ---------- Admin access list & audit trail ----------
+    // /admins/{uid} is created by hand in the Firebase Console. A signed-in user can only look up their own entry.
+    match /admins/{adminId} {
+      allow get: if isOwner(adminId);
+      allow list, write: if false;
+    }
+
+    // Every admin action is logged here. Admins can add entries (as themselves) and read them;
+    // nobody can edit or delete an entry, so the trail cannot be rewritten.
+    match /admin_audit/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && incoming().adminUid == request.auth.uid && incoming().createdAt == request.time;
+      allow update, delete: if false;
     }
 
     // ---------- 20. Admin-only data ----------

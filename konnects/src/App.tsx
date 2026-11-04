@@ -42,6 +42,12 @@ import { db } from "./lib/firebase";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ShowcaseSpaceView } from "./components/ShowcaseSpaceView";
 import { OnboardingFlow } from "./features/auth/OnboardingFlow";
+import {
+  AccountBlockedScreen,
+  AdminPanelHost,
+  isBlockedStatus,
+  useAdminStatus,
+} from "./features/admin";
 
 type Tab =
   | "home"
@@ -96,6 +102,7 @@ function AppContent() {
   }
 
   useProfileSelfHealing();
+  const { isAdmin: isAdminUser } = useAdminStatus();
   const [activeTab, setActiveTabState] = useState<Tab>(() => {
     try {
       const saved =
@@ -401,7 +408,14 @@ function AppContent() {
   if (!user) {
     return <LoginView />;
   }
-
+  if (isBlockedStatus(profile?.moderationStatus) && !isAdminUser) {
+    return (
+      <AccountBlockedScreen
+        status={profile?.moderationStatus}
+        reason={profile?.moderationNotes}
+      />
+    );
+  }
   if (showOnboarding) {
     if (!profile || profile.uid !== user.uid) {
       return (
@@ -499,6 +513,7 @@ function AppContent() {
       <DeveloperHUD />
       <ConflictResolutionModal />
       <MobileNumberGate />
+      <AdminPanelHost />
 
       {/* Floating Report Issue Trigger */}
       <div className="fixed right-6 bottom-40 z-45">

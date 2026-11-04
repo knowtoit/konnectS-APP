@@ -14,7 +14,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Clock, MapPin, PoundSterling, Bell, MessageSquare, ToggleLeft, ToggleRight, Search, Settings, AlertCircle, User, Shield, Wrench, CreditCard, Users, ShieldCheck, TrendingUp, CheckCircle2, Star, Zap, Package, ArrowRight, Briefcase, ScanFace, FileText, Award, DollarSign, Calendar, Sparkles, Plus, Image } from 'lucide-react';
 import { VerificationStatus } from './VerificationStatus';
 import { WorkHistoryModule } from './WorkHistoryModule';
-import { AdminDashboard } from './AdminDashboard';
 import { WorkerReelsModule } from './WorkerReelsModule';
 
 export function WorkerView({ onChat, activeTab }: { onChat: (id: string, name: string) => void; activeTab?: string }) {
@@ -89,7 +88,7 @@ export function WorkerView({ onChat, activeTab }: { onChat: (id: string, name: s
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   // Subtabbing and Pro Toolkit states
-  const [subTab, setSubTab] = useState<'requests' | 'history' | 'reels' | 'bills' | 'toolkit' | 'crm' | 'earnings_tax' | 'admin'>('requests');
+  const [subTab, setSubTab] = useState<'requests' | 'history' | 'reels' | 'bills' | 'toolkit' | 'crm' | 'earnings_tax'>('requests');
   const [quoteDistance, setQuoteDistance] = useState<number>(5);
   const [quoteHours, setQuoteHours] = useState<number>(2);
   const [quoteIsFreeNear, setQuoteIsFreeNear] = useState<boolean>(false);
@@ -1505,7 +1504,7 @@ export function WorkerView({ onChat, activeTab }: { onChat: (id: string, name: s
       )}
 
       {/* DASHBOARD SUBTAB SWITCHER */}
-      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 mb-8 p-1 bg-slate-100 rounded-2xl border border-slate-200/50">
+      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 mb-8 p-1 bg-slate-100 rounded-2xl border border-slate-200/50">
         {[
           { id: 'requests', label: 'Orders' },
           { id: 'history', label: 'Work' },
@@ -1513,8 +1512,7 @@ export function WorkerView({ onChat, activeTab }: { onChat: (id: string, name: s
           { id: 'bills', label: 'Bills' },
           { id: 'crm', label: 'CRM' },
           { id: 'earnings_tax', label: 'HMRC & Tax' },
-          { id: 'toolkit', label: 'Toolkit' },
-          { id: 'admin', label: 'Admin 👑' }
+          { id: 'toolkit', label: 'Toolkit' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -2537,12 +2535,6 @@ export function WorkerView({ onChat, activeTab }: { onChat: (id: string, name: s
               </div>
             )}
           </div>
-        </section>
-      )}
-
-      {subTab === 'admin' && (
-        <section className="mb-10 animate-fade-in text-left">
-          <AdminDashboard />
         </section>
       )}
 

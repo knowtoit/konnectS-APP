@@ -35,6 +35,9 @@ neighborhood?: {
 
 /** Set only after onboarding choices are successfully saved. */
 hasCompletedOnboarding?: boolean;
+  /** Set by admins: 'active' | 'warned' | 'temp_blocked' | 'perm_blocked' */
+  moderationStatus?: 'active' | 'warned' | 'temp_blocked' | 'perm_blocked';
+  moderationNotes?: string;
   mobileNumber?: string;
   bio?: string;
   isWorker: boolean;

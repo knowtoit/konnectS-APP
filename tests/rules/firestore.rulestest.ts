@@ -173,6 +173,82 @@ describe('username registry (login_index)', () => {
   });
 });
 
+// ================= ADMIN PANEL =================
+describe('admin access and actions', () => {
+  // "root" is an admin because a document exists at admins/root (created by hand in the Firebase Console)
+  beforeEach(async () => {
+    await seed((db) => setDoc(doc(db, 'admins', 'root'), { role: 'owner' }));
+    await seedUser('alice');
+    await seedUser('root');
+  });
+  const audit = (adminUid: string) => ({ adminUid, adminEmail: `${adminUid}@example.com`, action: 'moderation_warned', targetType: 'user', targetId: 'alice', createdAt: serverTimestamp() });
+
+  it('lets people check only their own admin entry, and nobody write to the list', async () => {
+    await assertSucceeds(getDoc(doc(as('root'), 'admins', 'root')));
+    await assertFails(getDoc(doc(as('alice'), 'admins', 'root')));
+    await assertFails(getDocs(collection(as('root'), 'admins')));
+    await assertFails(setDoc(doc(as('alice'), 'admins', 'alice'), { role: 'owner' })); // nobody can make themselves admin
+    await assertFails(setDoc(doc(as('root'), 'admins', 'someone'), { role: 'owner' })); // not even an admin, from the app
+  });
+
+  it('lets admins (and only admins) list users', async () => {
+    await assertSucceeds(getDocs(collection(as('root'), 'users')));
+    await assertFails(getDocs(collection(as('alice'), 'users')));
+  });
+
+  it('lets an admin verify and moderate a user, but not the user themselves', async () => {
+    await assertSucceeds(updateDoc(doc(as('root'), 'users', 'alice'), { verificationStatus: 'verified', moderationStatus: 'temp_blocked', moderationNotes: 'spam' }));
+    await assertFails(updateDoc(doc(as('alice'), 'users', 'alice'), { moderationStatus: 'active' }));
+    await assertFails(updateDoc(doc(as('alice'), 'users', 'alice'), { verificationStatus: 'verified' }));
+  });
+
+  it('stops a blocked account creating listings, offers and bookings', async () => {
+    await seed((db) => updateDoc(doc(db, 'users', 'alice'), { moderationStatus: 'perm_blocked' }));
+    await seed((db) => setDoc(doc(db, 'items', 'i1'), { sellerId: 'seller', title: 'Bike', price: 100, isFree: false, status: 'available', createdAt: now() }));
+    await assertFails(addDoc(collection(as('alice'), 'items'), { sellerId: 'alice', title: 'Chair', price: 5, isFree: false, status: 'available', createdAt: serverTimestamp() }));
+    await assertFails(addDoc(collection(as('alice'), 'offers'), { itemId: 'i1', sellerId: 'seller', buyerId: 'alice', offerPrice: 50, status: 'pending', createdAt: serverTimestamp() }));
+    await assertFails(addDoc(collection(as('alice'), 'bookings'), { customerId: 'alice', serviceType: 'cleaning', status: 'pending', createdAt: serverTimestamp() }));
+    // a warned (not blocked) account can still act
+    await seed((db) => updateDoc(doc(db, 'users', 'alice'), { moderationStatus: 'warned' }));
+    await assertSucceeds(addDoc(collection(as('alice'), 'items'), { sellerId: 'alice', title: 'Chair', price: 5, isFree: false, status: 'available', createdAt: serverTimestamp() }));
+  });
+
+  it('lets an admin take a listing down, and only that', async () => {
+    await seed((db) => setDoc(doc(db, 'items', 'i1'), { sellerId: 'seller', title: 'Bike', price: 100, isFree: false, status: 'available', createdAt: now() }));
+    await assertFails(updateDoc(doc(as('root'), 'items', 'i1'), { price: 1 }));
+    await assertFails(updateDoc(doc(as('root'), 'items', 'i1'), { status: 'available', moderatedBy: 'root' }));
+    await assertSucceeds(updateDoc(doc(as('root'), 'items', 'i1'), { status: 'deleted', moderatedBy: 'root', moderationReason: 'scam', updatedAt: serverTimestamp() }));
+  });
+
+  it('keeps reports private to admins, who can change only the status', async () => {
+    await assertSucceeds(addDoc(collection(as('alice'), 'feedback'), { userId: 'alice', subject: 'bug', description: 'x' }));
+    await seed((db) => setDoc(doc(db, 'feedback', 'f1'), { userId: 'alice', subject: 'bug', description: 'x' }));
+    await assertFails(getDoc(doc(as('alice'), 'feedback', 'f1')));
+    await assertSucceeds(getDoc(doc(as('root'), 'feedback', 'f1')));
+    await assertFails(updateDoc(doc(as('root'), 'feedback', 'f1'), { description: 'edited' }));
+    await assertSucceeds(updateDoc(doc(as('root'), 'feedback', 'f1'), { status: 'resolved', resolvedBy: 'root', updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(as('alice'), 'feedback', 'f1'), { status: 'resolved' }));
+  });
+
+  it('lets an admin resolve an SOS alert and nothing else about it', async () => {
+    await seed((db) => setDoc(doc(db, 'sos_alerts', 's1'), { userId: 'alice', status: 'active', message: 'help' }));
+    await assertFails(updateDoc(doc(as('root'), 'sos_alerts', 's1'), { message: 'changed' }));
+    await assertSucceeds(updateDoc(doc(as('root'), 'sos_alerts', 's1'), { status: 'resolved', resolvedBy: 'root', resolvedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(as('alice'), 'sos_alerts', 's1'), { status: 'resolved' }));
+  });
+
+  it('keeps an append-only audit trail only admins can write or read', async () => {
+    await assertSucceeds(addDoc(collection(as('root'), 'admin_audit'), audit('root')));
+    await assertFails(addDoc(collection(as('root'), 'admin_audit'), audit('someone-else'))); // cannot log as another person
+    await assertFails(addDoc(collection(as('alice'), 'admin_audit'), audit('alice')));
+    await seed((db) => setDoc(doc(db, 'admin_audit', 'a1'), { adminUid: 'root', action: 'x' }));
+    await assertSucceeds(getDoc(doc(as('root'), 'admin_audit', 'a1')));
+    await assertFails(getDoc(doc(as('alice'), 'admin_audit', 'a1')));
+    await assertFails(updateDoc(doc(as('root'), 'admin_audit', 'a1'), { action: 'edited' }));
+    await assertFails(deleteDoc(doc(as('root'), 'admin_audit', 'a1')));
+  });
+});
+
 // ================= LOGIN INDEX =================
 describe('login_index', () => {
   const entry = (uid: string) => ({ uid, email: `${uid}@example.com`, username: uid });

@@ -29,6 +29,7 @@ interface ProfileOverviewProps {
   actions: ProfileAction[];
   onOpen: (view: string) => void;
   onLogout: () => void | Promise<void>;
+  accountControls: ReactNode;
 }
 
 const panel =
@@ -73,6 +74,7 @@ export function ProfileOverview({
   actions,
   onOpen,
   onLogout,
+  accountControls,
 }: ProfileOverviewProps) {
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -246,6 +248,12 @@ export function ProfileOverview({
             </div>
           </section>
 
+          <section className={`${panel} p-5`}>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Account controls
+            </h2>
+            <div className="mt-4 space-y-5">{accountControls}</div>
+          </section>
           <nav className={`${panel} p-3`} aria-label="Profile sections">
             <div
               aria-current="page"
