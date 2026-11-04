@@ -9,3 +9,7 @@ config.bat
 
 # also matches a node_modules symlink (the "node_modules/" form only matches directories)
 node_modules
+
+konnects/emulator-data/
+konnects/emulator-backup-*/
+konnects/firebase-export-*/

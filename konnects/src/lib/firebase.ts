@@ -3,23 +3,55 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  connectAuthEmulator,
+} from "firebase/auth";
+import {
+  getFirestore,
+  doc,
+  getDocFromServer,
+  connectFirestoreEmulator,
+} from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
+import firebaseConfig from "../../firebase-applet-config.json";
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+const useEmulators =
+  import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+
+const app = initializeApp(
+  useEmulators
+    ? {
+        apiKey: "demo-key",
+        authDomain: "demo-konnects.firebaseapp.com",
+        projectId: "demo-konnects",
+        storageBucket: "demo-konnects.appspot.com",
+      }
+    : firebaseConfig,
+);
+
+export const db = useEmulators
+  ? getFirestore(app)
+  : getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+
+if (useEmulators) {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099");
+  connectFirestoreEmulator(db, "127.0.0.1", 8085);
+  connectStorageEmulator(storage, "127.0.0.1", 9199);
+}
+
 export { firebaseConfig };
 
 // Connection test helper
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, "test", "connection"));
   } catch {
     // Operating with standard local persistence or offline mode
   }
@@ -28,12 +60,12 @@ testConnection().catch(() => {});
 
 // Error handling as required by instructions
 export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+  CREATE = "create",
+  UPDATE = "update",
+  DELETE = "delete",
+  LIST = "list",
+  GET = "get",
+  WRITE = "write",
 }
 
 export interface FirestoreErrorInfo {
@@ -50,10 +82,14 @@ export interface FirestoreErrorInfo {
       providerId?: string | null;
       email?: string | null;
     }[];
-  }
+  };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null,
+) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -62,14 +98,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
     },
     operationType,
-    path
-  }
+    path,
+  };
   const errMessage = JSON.stringify(errInfo);
-  console.warn('Firestore Operation Notice: ', errMessage);
+  console.warn("Firestore Operation Notice: ", errMessage);
 }

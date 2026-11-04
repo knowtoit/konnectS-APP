@@ -548,6 +548,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         earnedBadges: [],
         referralCode: Math.random().toString(36).substring(7).toUpperCase(),
         isWorker: false,
+        hasCompletedOnboarding: false,
         createdAt: serverTimestamp(),
       };
       try {

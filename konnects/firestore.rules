@@ -67,8 +67,25 @@ service cloud.firestore {
                (!('featured' in data) || data.featured is bool) &&
                (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
                (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2048 && data.photoURL.matches('https://.*'))) &&
-               (!('hasCompletedTour' in data) || data.hasCompletedTour is bool);
-      }
+               (!('hasCompletedTour' in data) || data.hasCompletedTour is bool) &&
+                (!('onboardingRole' in data) || data.onboardingRole in ['service_provider', 'community_member']) &&
+                (!('neighborhood' in data) || (
+                    data.neighborhood is map &&
+                    data.neighborhood.keys().hasAll(['name', 'radiusKm']) &&
+                    data.neighborhood.keys().hasOnly(['name', 'radiusKm']) &&
+                    data.neighborhood.name is string &&
+                    data.neighborhood.name.size() > 0 &&
+                    data.neighborhood.name.size() <= 100 &&
+                    data.neighborhood.radiusKm is number &&
+                    data.neighborhood.radiusKm >= 1 &&
+                    data.neighborhood.radiusKm <= 50
+                    )) &&
+                    (!('hasCompletedOnboarding' in data) ||
+                      data.hasCompletedOnboarding is bool) &&
+                    (!('hasCompletedOnboarding' in data) ||
+                      data.hasCompletedOnboarding == false ||
+                      data.keys().hasAll(['onboardingRole', 'neighborhood']));
+                      }
 
       allow read: if true;
       allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
@@ -86,7 +103,7 @@ service cloud.firestore {
           'quietHoursEnd', 'accessibilityFontScale', 'accessibilityHighContrast',
           'darkMode', 'isPremiumWorker', 'premiumExpiryDate', 'skills', 
           'verificationPhoto', 'featured',
-          'displayName', 'photoURL', 'hasCompletedTour', 'email'
+          'displayName', 'photoURL', 'hasCompletedTour', 'email', 'onboardingRole', 'neighborhood', 'hasCompletedOnboarding'
         ]) &&
         // The profile email may only be set to the address the user is actually signed in with
         (

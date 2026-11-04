@@ -24,6 +24,17 @@ export interface UserProfile {
   displayName?: string;
   /** True once the user has finished or skipped the guided tour (synced across devices) */
   hasCompletedTour?: boolean;
+  /** User's chosen intent; does not grant provider verification. */
+onboardingRole?: 'service_provider' | 'community_member';
+
+/** Preferred neighborhood, separate from live GPS location. */
+neighborhood?: {
+  name: string;
+  radiusKm: number;
+};
+
+/** Set only after onboarding choices are successfully saved. */
+hasCompletedOnboarding?: boolean;
   mobileNumber?: string;
   bio?: string;
   isWorker: boolean;
